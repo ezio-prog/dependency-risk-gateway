@@ -17,26 +17,21 @@ import {
 const app = new Hono();
 
 
-// ============================================================
-// CONFIGURATION
-// ============================================================
-
 const PAY_TO =
-  "0x74d967874bc82f62321edFca05aE1662a65F31d8";
+  "<YOUR_PUBLIC_WALLET_ADDRESS>";
+
 
 const NETWORK =
   "eip155:84532";
 
+
 const FACILITATOR_URL =
   "https://x402.org/facilitator";
+
 
 const BACKEND_URL =
   "https://dependency-risk-api.giraffehorse.workers.dev";
 
-
-// ============================================================
-// FACILITATOR
-// ============================================================
 
 const facilitator =
   new HTTPFacilitatorClient({
@@ -44,12 +39,11 @@ const facilitator =
   });
 
 
-// ============================================================
-// x402 SERVER
-// ============================================================
-
 const server =
-  new x402ResourceServer(facilitator);
+  new x402ResourceServer(
+    facilitator,
+  );
+
 
 server.register(
   NETWORK,
@@ -57,33 +51,36 @@ server.register(
 );
 
 
-// ============================================================
-// FREE ROUTES
-// ============================================================
+// --------------------------------
+// FREE ROOT
+// --------------------------------
 
 app.get("/", (c) => {
   return c.json({
     name: "DependencyRisk x402 Gateway",
     version: "1.0.0",
     status: "online",
-    service: "dependency-security-intelligence",
     payment: "x402",
     network: NETWORK,
   });
 });
 
 
+// --------------------------------
+// FREE HEALTH
+// --------------------------------
+
 app.get("/health", (c) => {
   return c.json({
     status: "healthy",
-    gateway: "online",
+    service: "dependency-risk-gateway",
   });
 });
 
 
-// ============================================================
-// x402 PAYMENT MIDDLEWARE
-// ============================================================
+// --------------------------------
+// X402 PAYMENT
+// --------------------------------
 
 app.use(
   paymentMiddleware(
@@ -101,7 +98,8 @@ app.use(
         description:
           "Check a package version for known security vulnerabilities.",
 
-        mimeType: "application/json",
+        mimeType:
+          "application/json",
       },
     },
 
@@ -110,9 +108,9 @@ app.use(
 );
 
 
-// ============================================================
-// PAID ENDPOINT
-// ============================================================
+// --------------------------------
+// PAID API
+// --------------------------------
 
 app.get(
   "/check-package",
@@ -137,15 +135,6 @@ app.get(
         {
           error:
             "Missing required parameters.",
-
-          required: [
-            "package",
-            "ecosystem",
-            "version",
-          ],
-
-          example:
-            "/check-package?package=requests&ecosystem=PyPI&version=2.31.0",
         },
         400,
       );
@@ -164,10 +153,12 @@ app.get(
       packageName,
     );
 
+
     backendUrl.searchParams.set(
       "ecosystem",
       ecosystem,
     );
+
 
     backendUrl.searchParams.set(
       "version",
@@ -203,15 +194,18 @@ app.get(
 
           headers: {
             "Content-Type":
-              response.headers.get(
-                "Content-Type",
-              ) ||
               "application/json",
           },
         },
       );
 
-    } catch {
+    } catch (error) {
+
+      console.error(
+        "Backend request failed:",
+        error,
+      );
+
 
       return c.json(
         {
@@ -225,22 +219,21 @@ app.get(
 );
 
 
-// ============================================================
+// --------------------------------
 // 404
-// ============================================================
+// --------------------------------
 
 app.notFound((c) => {
+
   return c.json(
     {
-      error: "Endpoint not found.",
+      error:
+        "Endpoint not found.",
     },
     404,
   );
+
 });
 
-
-// ============================================================
-// CLOUDFLARE WORKER
-// ============================================================
 
 export default app;
