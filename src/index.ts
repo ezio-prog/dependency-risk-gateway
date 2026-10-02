@@ -2,17 +2,17 @@ import { Hono } from "hono";
 
 import {
   paymentMiddleware,
-  x402ResourceServer,
 } from "@x402/hono";
 
-import { HTTPFacilitatorClient } from "@x402/core/server";
+import {
+  HTTPFacilitatorClient,
+  x402ResourceServer,
+} from "@x402/core/server";
 
-import { registerExactEvmScheme } from "@x402/evm/exact/server";
+import {
+  ExactEvmScheme,
+} from "@x402/evm/exact/server";
 
-
-// ============================================================
-// APP
-// ============================================================
 
 const app = new Hono();
 
@@ -21,43 +21,44 @@ const app = new Hono();
 // CONFIGURATION
 // ============================================================
 
-// Your public receiving wallet
-const PAY_TO = "0x8AfE91fBc483aB8a64F51ED81E15FFe151E19Bf9";
+const PAY_TO =
+  "0x74d967874bc82f62321edFca05aE1662a65F31d8";
 
-// Base Sepolia testnet
-const NETWORK = "eip155:84532";
+const NETWORK =
+  "eip155:84532";
 
-// x402 facilitator
-const FACILITATOR_URL = "https://x402.org/facilitator";
+const FACILITATOR_URL =
+  "https://x402.org/facilitator";
 
-// Your already-working Python backend
 const BACKEND_URL =
   "https://dependency-risk-api.giraffehorse.workers.dev";
 
 
 // ============================================================
-// x402 FACILITATOR
+// FACILITATOR
 // ============================================================
 
-const facilitatorClient = new HTTPFacilitatorClient({
-  url: FACILITATOR_URL,
-});
-
-
-// ============================================================
-// x402 RESOURCE SERVER
-// ============================================================
-
-const resourceServer =
-  new x402ResourceServer(facilitatorClient);
-
-
-// Register EVM exact-payment support
-registerExactEvmScheme(resourceServer);
+const facilitator =
+  new HTTPFacilitatorClient({
+    url: FACILITATOR_URL,
+  });
 
 
 // ============================================================
-// FREE ROOT ENDPOINT
+// x402 SERVER
+// ============================================================
+
+const server =
+  new x402ResourceServer(facilitator);
+
+server.register(
+  NETWORK,
+  new ExactEvmScheme(),
+);
+
+
+// ============================================================
+// FREE ROUTES
 // ============================================================
 
 app.get("/", (c) => {
@@ -71,10 +72,6 @@ app.get("/", (c) => {
   });
 });
 
-
-// ============================================================
-// FREE HEALTH ENDPOINT
-// ============================================================
 
 app.get("/health", (c) => {
   return c.json({
@@ -108,126 +105,124 @@ app.use(
       },
     },
 
-    resourceServer,
+    server,
   ),
 );
 
 
 // ============================================================
-// PAID CHECK-PACKAGE ENDPOINT
+// PAID ENDPOINT
 // ============================================================
 
-app.get("/check-package", async (c) => {
+app.get(
+  "/check-package",
+  async (c) => {
 
-  const packageName =
-    c.req.query("package");
+    const packageName =
+      c.req.query("package");
 
-  const ecosystem =
-    c.req.query("ecosystem");
+    const ecosystem =
+      c.req.query("ecosystem");
 
-  const version =
-    c.req.query("version");
-
-
-  // ----------------------------------------------------------
-  // Validate request
-  // ----------------------------------------------------------
-
-  if (!packageName || !ecosystem || !version) {
-    return c.json(
-      {
-        error: "Missing required parameters.",
-
-        required: [
-          "package",
-          "ecosystem",
-          "version",
-        ],
-
-        example:
-          "/check-package?package=requests&ecosystem=PyPI&version=2.31.0",
-      },
-      400,
-    );
-  }
+    const version =
+      c.req.query("version");
 
 
-  // ----------------------------------------------------------
-  // Build backend request
-  // ----------------------------------------------------------
-
-  const backendUrl =
-    new URL(
-      "/check-package",
-      BACKEND_URL,
-    );
-
-
-  backendUrl.searchParams.set(
-    "package",
-    packageName,
-  );
-
-  backendUrl.searchParams.set(
-    "ecosystem",
-    ecosystem,
-  );
-
-  backendUrl.searchParams.set(
-    "version",
-    version,
-  );
-
-
-  // ----------------------------------------------------------
-  // Call Python DependencyRisk API
-  // ----------------------------------------------------------
-
-  try {
-
-    const response =
-      await fetch(
-        backendUrl.toString(),
+    if (
+      !packageName ||
+      !ecosystem ||
+      !version
+    ) {
+      return c.json(
         {
-          method: "GET",
+          error:
+            "Missing required parameters.",
+
+          required: [
+            "package",
+            "ecosystem",
+            "version",
+          ],
+
+          example:
+            "/check-package?package=requests&ecosystem=PyPI&version=2.31.0",
+        },
+        400,
+      );
+    }
+
+
+    const backendUrl =
+      new URL(
+        "/check-package",
+        BACKEND_URL,
+      );
+
+
+    backendUrl.searchParams.set(
+      "package",
+      packageName,
+    );
+
+    backendUrl.searchParams.set(
+      "ecosystem",
+      ecosystem,
+    );
+
+    backendUrl.searchParams.set(
+      "version",
+      version,
+    );
+
+
+    try {
+
+      const response =
+        await fetch(
+          backendUrl.toString(),
+          {
+            method: "GET",
+
+            headers: {
+              "Accept":
+                "application/json",
+            },
+          },
+        );
+
+
+      const body =
+        await response.text();
+
+
+      return new Response(
+        body,
+        {
+          status:
+            response.status,
 
           headers: {
-            "Accept": "application/json",
+            "Content-Type":
+              response.headers.get(
+                "Content-Type",
+              ) ||
+              "application/json",
           },
         },
       );
 
+    } catch {
 
-    const body =
-      await response.text();
-
-
-    return new Response(
-      body,
-      {
-        status: response.status,
-
-        headers: {
-          "Content-Type":
-            response.headers.get(
-              "Content-Type",
-            ) ||
-            "application/json",
+      return c.json(
+        {
+          error:
+            "DependencyRisk backend unavailable.",
         },
-      },
-    );
-
-  } catch (error) {
-
-    return c.json(
-      {
-        error:
-          "DependencyRisk backend unavailable.",
-      },
-      502,
-    );
-  }
-});
+        502,
+      );
+    }
+  },
+);
 
 
 // ============================================================
@@ -245,7 +240,7 @@ app.notFound((c) => {
 
 
 // ============================================================
-// CLOUDFLARE WORKER EXPORT
+// CLOUDFLARE WORKER
 // ============================================================
 
 export default app;
