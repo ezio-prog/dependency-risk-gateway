@@ -2,11 +2,11 @@ import { Hono } from "hono";
 
 import {
   paymentMiddleware,
+  x402ResourceServer,
 } from "@x402/hono";
 
 import {
   HTTPFacilitatorClient,
-  x402ResourceServer,
 } from "@x402/core/server";
 
 import {
@@ -18,7 +18,7 @@ const app = new Hono();
 
 
 const PAY_TO =
-  "<YOUR_PUBLIC_WALLET_ADDRESS>";
+  "0x8AfE91fBc483aB8a64F51ED81E15FFe151E19Bf9";
 
 
 const NETWORK =
@@ -42,13 +42,10 @@ const facilitator =
 const server =
   new x402ResourceServer(
     facilitator,
+  ).register(
+    NETWORK,
+    new ExactEvmScheme(),
   );
-
-
-server.register(
-  NETWORK,
-  new ExactEvmScheme(),
-);
 
 
 // --------------------------------
@@ -79,7 +76,7 @@ app.get("/health", (c) => {
 
 
 // --------------------------------
-// X402 PAYMENT
+// X402 PAYMENT MIDDLEWARE
 // --------------------------------
 
 app.use(
@@ -94,22 +91,19 @@ app.use(
             payTo: PAY_TO,
           },
         ],
-
         description:
           "Check a package version for known security vulnerabilities.",
-
         mimeType:
           "application/json",
       },
     },
-
     server,
   ),
 );
 
 
 // --------------------------------
-// PAID API
+// PAID ENDPOINT
 // --------------------------------
 
 app.get(
@@ -153,12 +147,10 @@ app.get(
       packageName,
     );
 
-
     backendUrl.searchParams.set(
       "ecosystem",
       ecosystem,
     );
-
 
     backendUrl.searchParams.set(
       "version",
@@ -175,7 +167,7 @@ app.get(
             method: "GET",
 
             headers: {
-              "Accept":
+              Accept:
                 "application/json",
             },
           },
@@ -202,7 +194,7 @@ app.get(
     } catch (error) {
 
       console.error(
-        "Backend request failed:",
+        "DependencyRisk backend error:",
         error,
       );
 
@@ -224,7 +216,6 @@ app.get(
 // --------------------------------
 
 app.notFound((c) => {
-
   return c.json(
     {
       error:
@@ -232,7 +223,6 @@ app.notFound((c) => {
     },
     404,
   );
-
 });
 
 
