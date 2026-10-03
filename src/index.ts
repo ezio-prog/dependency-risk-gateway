@@ -10,47 +10,34 @@ import {
 } from "@x402/core/server";
 
 import {
-  ExactEvmScheme,
+  registerExactEvmScheme,
 } from "@x402/evm/exact/server";
 
-
 const app = new Hono();
-
 
 const PAY_TO =
   "0x8AfE91fBc483aB8a64F51ED81E15FFe151E19Bf9";
 
-
 const NETWORK =
   "eip155:84532";
-
 
 const FACILITATOR_URL =
   "https://x402.org/facilitator";
 
-
 const BACKEND_URL =
   "https://dependency-risk-api.giraffehorse.workers.dev";
-
 
 const facilitator =
   new HTTPFacilitatorClient({
     url: FACILITATOR_URL,
   });
 
-
 const server =
   new x402ResourceServer(
     facilitator,
-  ).register(
-    NETWORK,
-    new ExactEvmScheme(),
   );
 
-
-// --------------------------------
-// FREE ROOT
-// --------------------------------
+registerExactEvmScheme(server);
 
 app.get("/", (c) => {
   return c.json({
@@ -62,22 +49,12 @@ app.get("/", (c) => {
   });
 });
 
-
-// --------------------------------
-// FREE HEALTH
-// --------------------------------
-
 app.get("/health", (c) => {
   return c.json({
     status: "healthy",
     service: "dependency-risk-gateway",
   });
 });
-
-
-// --------------------------------
-// X402 PAYMENT MIDDLEWARE
-// --------------------------------
 
 app.use(
   paymentMiddleware(
@@ -101,15 +78,9 @@ app.use(
   ),
 );
 
-
-// --------------------------------
-// PAID ENDPOINT
-// --------------------------------
-
 app.get(
   "/check-package",
   async (c) => {
-
     const packageName =
       c.req.query("package");
 
@@ -118,7 +89,6 @@ app.get(
 
     const version =
       c.req.query("version");
-
 
     if (
       !packageName ||
@@ -134,13 +104,11 @@ app.get(
       );
     }
 
-
     const backendUrl =
       new URL(
         "/check-package",
         BACKEND_URL,
       );
-
 
     backendUrl.searchParams.set(
       "package",
@@ -157,15 +125,12 @@ app.get(
       version,
     );
 
-
     try {
-
       const response =
         await fetch(
           backendUrl.toString(),
           {
             method: "GET",
-
             headers: {
               Accept:
                 "application/json",
@@ -173,31 +138,25 @@ app.get(
           },
         );
 
-
       const body =
         await response.text();
-
 
       return new Response(
         body,
         {
           status:
             response.status,
-
           headers: {
             "Content-Type":
               "application/json",
           },
         },
       );
-
     } catch (error) {
-
       console.error(
         "DependencyRisk backend error:",
         error,
       );
-
 
       return c.json(
         {
@@ -210,11 +169,6 @@ app.get(
   },
 );
 
-
-// --------------------------------
-// 404
-// --------------------------------
-
 app.notFound((c) => {
   return c.json(
     {
@@ -224,6 +178,5 @@ app.notFound((c) => {
     404,
   );
 });
-
 
 export default app;
