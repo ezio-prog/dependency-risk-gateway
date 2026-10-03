@@ -2,5 +2,12 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "dependency-risk-gateway",
   "main": "src/index.ts",
-  "compatibility_date": "2026-10-02"
+  "compatibility_date": "2026-10-02",
+
+  "services": [
+    {
+      "binding": "DEPENDENCY_RISK_API",
+      "service": "dependency-risk-api"
+    }
+  ]
 }
